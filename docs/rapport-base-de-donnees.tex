@@ -1,0 +1,109 @@
+\documentclass[french]{template}
+
+\usepackage{minted}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\definecolor{LightGray}{gray}{0.9}
+
+\newminted[pythoncode]{python}{
+    linenos,
+    bgcolor=LightGray,
+    breaklines
+}
+
+\begin{document}
+
+\titre{Projet Immorthon - Base de données}
+\UE{Apprentissage Profond}
+\enseignant{Axel \textsc{Carlier}}
+\eleves{Axel \textsc{Bechu} \\ Laerian \textsc{Bontinck} \\ Clément \textsc{Demazure} \\ Vianney \textsc{Hervy} \\ Yige \textsc{Yang}}
+
+\fairemarges
+\fairepagedegarde
+\tabledematieres
+
+\section{Introduction}
+
+Lorsque nous entendons pour la première fois un mot en français, il nous est parfois possible d'en comprendre le sens à l'aide du contexte ou de l'étymologie. C'est cette seconde méthode que nous allons essayer de reproduire à l'aide d'un LLM.
+
+\section{Description du sujet}
+
+Ce projet est donc un projet de génération de texte. Il sera réalisé sur un Jupyter Notebook hébergé sur Google Colab. Nous utiliserons principalement les bibliothèques \texttt{pandas} (pour le traitement préalable des données), \texttt{tensorflow.keras} (pour la création et l'entraînement du modèle) et \texttt{numpy} (pour le traitement général des données).
+
+\vspace{\baselineskip}
+L'entrée du modèle sera un mot unique inventé\footnote{avec ce projet par exemple \url{https://github.com/sully-vian/creabulaire}} qui ressemble au français. La sortie attendue sera une courte définition de ce mot.
+
+\vspace{\baselineskip}
+Le nom "Immorthon" est un mot-valise entre "immortel" et "python". "Immortel" est le surnom\footnote{\url{https://fr.wikipedia.org/wiki/Acad\%C3\%A9mie_fran\%C3\%A7aise\#\%C2\%AB_Immortalit\%C3\%A9_\%C2\%BB}} donné aux académiciens de l'Académie Française, dont une partie de la responsibilité est de définir les mots de la langue française.
+
+\section{Liens}
+
+Notebook: \\
+\url{https://colab.research.google.com/drive/1JHivpddBodExl7UOi0xoBnRhk8Y1bTVQ?usp=sharing}
+
+\vspace{\baselineskip}
+Base de données: \\
+\url{https://www.kaggle.com/datasets/kartmaan/dictionnaire-francais}
+
+\vspace{\baselineskip}
+Repositoire git: \\
+\url{https://github.com/sully-vian/immorthon}
+
+\section{Base de données}
+
+Nous prévoyons de partir d'un modèle déjà entraîné sur le français et de l'affiner sur un corpus de défnitions. Nous avons trouvé sur le site de Kaggle\footnote{\url{https://www.kaggle.com/}} un dictionnaire français\footnote{\url{https://www.kaggle.com/datasets/kartmaan/dictionnaire-francais}} sous forme de \texttt{csv} qui allie plus de 800 000 mots et leurs définitions.
+
+L'avantage principal de cette base de données est que l'hébergeur Kaggle dispose de sa propre API ainsi que de sa bibliothèque python, ce qui nous permet de récupérer les données directement sans les mettre sur un git nous-mêmes.
+
+Nous pensons découper les mots en entrée, soit en tokenisant par syllabe (cohérent avec l'approche éymologique), soit en utilisant directement les lettres comme tokens. Nous pensons que la première approche est plus pertinente, car elle nous permet de mieux comprendre la structure du mot et d'en déduire son sens.
+
+\subsection{Structure de la base de données}
+
+La base de données utilisée est un tableau contenant deux colonnes principales :
+\begin{itemize}
+    \item \textbf{Mot} : Cette colonne contient les mots en français.
+    \item \textbf{Définitions} : Cette colonne contient les définitions associées à chaque mot.
+\end{itemize}
+
+Voici un exemple de données issues de la base de données :
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{|c|p{10cm}|}
+        \hline
+        \textbf{Mot} & \textbf{Définitions}                                                                                                                       \\ \hline
+        Toulouse     & Commune de France située au bord de la Garonne, chef-lieu du département de la Haute-Garonne et de la région administrative Midi-Pyrénées. \\ \hline
+        Python       & Langage de programmation interprété, orienté objet et de haut niveau, avec une syntaxe simple et lisible.                                  \\ \hline
+    \end{tabular}
+    \caption{Exemple de structure de la base de données.}
+\end{table}
+
+\subsection{Traitement sur la base de données}
+
+La base de données possède toutefaois quelques défauts majeurs:
+
+\begin{itemize}
+    \item Tous les mots de la première colonne commencent par une majuscule. Ce qui est réglable par une fonction de \texttt{lower()} sur la première colonne.
+    \item Ensuite, une part non-négligeable de la base de donnée concerne les verbes conjugués et les variantes (plurielles ou féminines) de noms et adjectifs. Il nous faut donc trouver un moyen de les identifier pour ne pas les inclure dans nos données d'entraînement ou de test.
+    \item De même, nous avons décidé d'exclure les noms de villes, de pays et de personnes et les noms propres en général. En effet, ces mots sont souvent très spécifiques et ne sont pas représentatifs de la langue française dans son ensemble.
+    \item Nous envisageons également d'exclure les mots qui sont "explicitement" issus de langues étrangères, dont l'étymologie est clairement à part. Ces mots seront considérés comme "outliers" ne suivant pas la "logique" que nous souhaitons inculquer à notre modèle.
+\end{itemize}
+\subsubsection{Exemple de données valides}
+
+\begin{pythoncode}
+    Mardi ["Deuxième jour de la semaine"]
+\end{pythoncode}
+
+\subsubsection{Exemples de données invalides}
+
+\begin{pythoncode}
+    # variation d'un nom
+    Allemands ["Masculin pluriel de Allemand"]
+    # verbe conjugué
+    Ont ["Troisième personne du pluriel de l'indicatif présent du verbe avoir."]
+    # nom de ville
+    Toulouse ["commune de France située au bord de la Garonne,  chef-lieu du département de la Haute-Garonne et de la région administrative Midi-Pyrénées."]
+\end{pythoncode}
+
+\end{document}
