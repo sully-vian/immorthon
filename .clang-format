@@ -1,0 +1,13 @@
+IndentPPDirectives: BeforeHash
+UseTab: Never
+TabWidth: 4
+IndentWidth: 4
+ColumnLimit: 80
+AlignArrayOfStructures: Left
+AlignTrailingComments:
+    Kind: Always
+    OverEmptyLines: 2
+BreakBeforeBraces: Attach
+BraceWrapping:
+    AfterStruct: true
+IndentCaseLabels: true
