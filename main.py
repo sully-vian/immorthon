@@ -1,13 +1,12 @@
 import requests
 from bs4 import BeautifulSoup
-import sys
 import csv
 
 baseUrl = "https://www.wordreference.com/definition/"
 
 corpusFile = "corpus.txt"
 data = []
-dicoFile = "dico.csv"
+dicoFile = "dico-py.csv"
 
 # read from corpus
 with open(corpusFile, mode='r', encoding='utf-8') as corpus:
