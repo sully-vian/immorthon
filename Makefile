@@ -2,7 +2,7 @@
 CC = g++
 
 # Compiler flags
-CFLAGS = -Wall -Wextra -pedantic -std=c++20 -I/usr/include/libxml2
+CFLAGS = -Wall -Wextra -pedantic -std=c++17 -I/usr/include/libxml2
 
 # Libraries
 LIBS = -lcurl -lxml2
