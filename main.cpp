@@ -1,3 +1,5 @@
+#include <atomic>
+#include <ctime>
 #include <curl/curl.h>
 #include <format>
 #include <fstream>
@@ -8,12 +10,43 @@
 #include <vector>
 
 const std::string columns = "word,definition\n";
-const std::string baseUrl = "https://www.wordreference.com/definition/";
-const std::string corpusFile = "corpus.txt";
-const std::string dicoFile = "dico-c.csv";
+const std::string searchUrl =
+    "https://www.oxfordlearnersdictionaries.com/search/english/";
 
-const xmlChar *defXpathExpr = (const xmlChar *)"//span[@class='rh_def']";
-const xmlChar *sdefXpathExpr = (const xmlChar *)"//span[@class='rh_sdef']";
+// find span with class "def" inside div with id "entryContent"
+const xmlChar *xPathExpr =
+    (const xmlChar *)"//div[@id='entryContent']//span[@class='def']";
+
+void printError(const std::string &msg) {
+#pragma omp critical(cerr)
+    {
+        // erase full line and move to the beginning
+        std::cerr << "\033[2K\r";
+        // print error message
+        std::cerr << msg << std::endl;
+    }
+}
+
+void printProgressBar(const int progress, const int total) {
+    const int barWidth = 50;
+    float percentage = static_cast<float>(progress) / total;
+    int pos = static_cast<int>(barWidth * percentage);
+
+#pragma omp critical(cout)
+    {
+        std::cout << "\r[";
+        for (int i = 0; i < barWidth; ++i) {
+            if (i < pos) {
+                std::cout << "#";
+            } else {
+                std::cout << "-";
+            }
+        }
+        std::cout << "] " << progress << "/" << total << " ("
+                  << int(percentage * 100.0) << "%)";
+        std::cout.flush();
+    }
+}
 
 // Callback function to write the response data into a string
 size_t writeCallback(void *contents, size_t size, size_t nmemb,
@@ -30,36 +63,29 @@ std::string extractDefinition(const std::string &html) {
                                     HTML_PARSE_RECOVER | HTML_PARSE_NOERROR |
                                         HTML_PARSE_NOWARNING);
     if (!doc) {
-        std::cerr << "Failed to parse HTML." << std::endl;
+        // printError("Failed to parse HTML.");
         return "";
     }
-
-    // std::cout << html << std::endl;
 
     // Create XPath context
     xmlXPathContextPtr xpathCtx = xmlXPathNewContext(doc);
     if (!xpathCtx) {
-        std::cerr << "Failed to create XPath context." << std::endl;
+        // printError("Failed to create XPath context.");
         xmlFreeDoc(doc);
         return "";
     }
 
     xmlXPathObjectPtr xpathObj;
 
-    // first get / check if there is a <span class='rh_sdef'>
-    xpathObj = xmlXPathEvalExpression(sdefXpathExpr, xpathCtx);
+    // get the first span with class "def" insude the div with id "entryContent"
+    xpathObj = xmlXPathEvalExpression(xPathExpr, xpathCtx);
     if (!xpathObj || !xpathObj->nodesetval ||
         xpathObj->nodesetval->nodeNr == 0) {
-        // try with <span class='rh_def'>
-        xpathObj = xmlXPathEvalExpression(defXpathExpr, xpathCtx);
-        if (!xpathObj || !xpathObj->nodesetval ||
-            xpathObj->nodesetval->nodeNr == 0) {
-            // std::cerr << "Failed to evaluate XPath expression." << std::endl;
-            xmlXPathFreeObject(xpathObj);
-            xmlXPathFreeContext(xpathCtx);
-            xmlFreeDoc(doc);
-            return "";
-        }
+        // printError("Failed to evaluate XPath expression");
+        xmlXPathFreeObject(xpathObj);
+        xmlXPathFreeContext(xpathCtx);
+        xmlFreeDoc(doc);
+        return "";
     }
 
     // Extract the first matching node
@@ -71,10 +97,17 @@ std::string extractDefinition(const std::string &html) {
         xmlFree(content);
     }
 
-    // Iterate over the children of the node to extract only the direct text
+    // extract recursively all text nodes
     for (xmlNodePtr child = node->children; child; child = child->next) {
         if (child->type == XML_TEXT_NODE) {
             definition += (const char *)child->content;
+        } else if (child->type == XML_ELEMENT_NODE) {
+            // Recursively extract text from child elements
+            xmlChar *childContent = xmlNodeGetContent(child);
+            if (childContent) {
+                definition += (const char *)childContent;
+                xmlFree(childContent);
+            }
         }
     }
 
@@ -83,19 +116,20 @@ std::string extractDefinition(const std::string &html) {
     xmlXPathFreeContext(xpathCtx);
     xmlFreeDoc(doc);
 
-    // Trim and remove last char
+    // Trim
     definition.erase(definition.find_last_not_of(" \n\r\t") + 1);
-    definition.pop_back();
     return definition;
 }
 
 // Function to fetch HTML for a given word
 std::string fetchHtml(const std::string &word) {
-    const std::string fullUrl = baseUrl + word;
+    const std::string fullUrl =
+        searchUrl +
+        "?q=" + curl_easy_escape(nullptr, word.c_str(), word.size());
 
     CURL *curl = curl_easy_init();
     if (!curl) {
-        std::cerr << "Failed to initialize curl" << std::endl;
+        // printError("Failed to initialize curl.");
         return "";
     }
 
@@ -103,11 +137,12 @@ std::string fetchHtml(const std::string &word) {
     curl_easy_setopt(curl, CURLOPT_URL, fullUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &html);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        std::cerr << "curl_easy_perform() failed for word '" << word
-                  << "': " << curl_easy_strerror(res) << std::endl;
+        // printError("curl_easy_perform() failed for word '" + word +
+        //            "': " + curl_easy_strerror(res));
         curl_easy_cleanup(curl);
         return "";
     }
@@ -121,7 +156,7 @@ std::vector<std::string> readCorpus(const std::string &filename) {
     std::vector<std::string> words;
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Failed to open corpus file: " << filename << std::endl;
+        printError("Failed to open corpus file: " + filename);
         return words;
     }
 
@@ -136,12 +171,27 @@ std::vector<std::string> readCorpus(const std::string &filename) {
     return words;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    std::time_t startTime = std::time(nullptr);
+
+    if (argc != 3) {
+        printError("Usage: " + std::string(argv[0]) +
+                   " <corpus_file> <output_file.csv>");
+        return 1;
+    }
+    const std::string corpusFile = argv[1];
+    const std::string dicoFile = argv[2];
+
+#ifdef _OPENMP
+    std::cout << "OpenMP is enabled." << std::endl;
+#else
+    std::cout << "OpenMP is not enabled." << std::endl;
+#endif
 
     // Read words from the corpus file
     std::vector<std::string> words = readCorpus(corpusFile);
     if (words.empty()) {
-        std::cerr << "No words found in the corpus file." << std::endl;
+        printError("No words found in the corpus file.");
         return 1;
     }
 
@@ -151,39 +201,41 @@ int main() {
     // open dico.csv
     FILE *file = fopen(dicoFile.c_str(), "w");
     if (!file) {
-        std::cerr << "Failed to open dico.csv for writing." << std::endl;
+        printError("Failed to open " + dicoFile + " for writing.");
         return 1;
     }
 
     // write header to dico.csv
     if (fputs(columns.c_str(), file) == EOF) {
-        std::cerr << "Failed to write header to dico.csv." << std::endl;
+        printError("Failed to write header to " + dicoFile);
         fclose(file);
         return 1;
     }
 
     const int numToAdd = words.size();
-    int numAdded = 0;
+    std::atomic<int> numAdded(0);
 
     // Fetch and print definitions for each word
-#pragma omp parallel for
-    for (const std::string &word : words) {
+    // parallelize but do the words in order
+#pragma omp parallel for schedule(static, 1)
+    for (std::string &word : words) {
         // skip if word starts with "#"
         if (word[0] == '#') {
             continue;
         }
 
+        // convert word to lowercase
+        std::transform(word.begin(), word.end(), word.begin(), ::tolower);
+
         std::string html = fetchHtml(word);
         if (html.empty()) {
-            std::cerr << "Failed to fetch HTML for word: " << word << std::endl;
+            printError("Failed to fetch HTML for word '" + word + "'");
             continue;
         }
 
         std::string definition = extractDefinition(html);
         if (definition.empty()) {
-#pragma omp critical(err)
-            std::cout << "Word '" << word << "' not found in WordReference."
-                      << std::endl;
+            printError("Failed to extract definition for word '" + word + "'");
             continue;
         }
 
@@ -193,28 +245,31 @@ int main() {
                  definition.c_str());
         std::string entryString(buffer);
 
-// write entry to dico.csv
+// write entry to output file
 #pragma omp critical(csv)
         {
             if (fputs(entryString.c_str(), file) == EOF) {
-                std::cerr << "Failed to write to dico.csv." << std::endl;
+                printError("Failed to write entry to " + dicoFile);
                 fclose(file);
                 exit(1);
             }
-            fflush(file);
+            // fflush(file);
         }
 
-#pragma omp critical(progress)
-        {
-            numAdded++;
-            std::cout << std::format("{}/{}\n", numAdded, numToAdd);
-        }
+        numAdded++;
+        printProgressBar(numAdded, numToAdd);
     }
 
     fclose(file);
 
-    std::cout << "Definitions saved to " << dicoFile << std::endl;
-    std::cout << "Done!" << std::endl;
+    std::time_t endTime = std::time(nullptr);
+
+    std::cout << std::endl;
+    std::cout << numAdded << " definitions added to " << dicoFile << std::endl;
+    std::cout << numToAdd - numAdded << " definitions failed to be added."
+              << std::endl;
+    std::cout << "Time taken: " << endTime - startTime << " seconds."
+              << std::endl;
 
     return 0;
 }
