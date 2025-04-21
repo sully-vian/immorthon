@@ -1,3 +1,4 @@
+# C executables
 main
 
 # Jupyter Notebook
@@ -15,3 +16,5 @@ main
 *.nlo
 *_minted
 
+# VS Code
+.vscode/
