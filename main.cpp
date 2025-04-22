@@ -1,7 +1,7 @@
+#include <algorithm>
 #include <atomic>
 #include <ctime>
 #include <curl/curl.h>
-#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <libxml/HTMLparser.h>
@@ -11,7 +11,7 @@
 
 const std::string columns = "word,definition\n";
 const std::string searchUrl =
-    "https://www.oxfordlearnersdictionaries.com/search/english/";
+    "https://www.oxfordlearnersdictionaries.com/search/english/?q=";
 
 // find span with class "def" inside div with id "entryContent"
 const xmlChar *xPathExpr =
@@ -92,21 +92,24 @@ std::string extractDefinition(const std::string &html) {
     xmlNodePtr node = xpathObj->nodesetval->nodeTab[0];
     std::string definition;
 
-    char *content = (char *)xmlNodeGetContent(node);
-    if (content) {
-        xmlFree(content);
-    }
-
     // extract recursively all text nodes
     for (xmlNodePtr child = node->children; child; child = child->next) {
         if (child->type == XML_TEXT_NODE) {
+            // if text, append to definition
             definition += (const char *)child->content;
         } else if (child->type == XML_ELEMENT_NODE) {
-            // Recursively extract text from child elements
-            xmlChar *childContent = xmlNodeGetContent(child);
-            if (childContent) {
-                definition += (const char *)childContent;
-                xmlFree(childContent);
+            // check if "a" tag with "Ref" class
+            xmlChar *classAttr = xmlGetProp(child, (const xmlChar *)"class");
+            if (classAttr && xmlStrEqual(child->name, (const xmlChar *)"a") &&
+                xmlStrEqual(classAttr, (const xmlChar *)"Ref")) {
+                xmlChar *childContent = xmlNodeGetContent(child);
+                if (childContent) {
+                    definition += (const char *)childContent;
+                    xmlFree(childContent);
+                }
+            }
+            if (classAttr) {
+                xmlFree(classAttr);
             }
         }
     }
@@ -124,8 +127,7 @@ std::string extractDefinition(const std::string &html) {
 // Function to fetch HTML for a given word
 std::string fetchHtml(const std::string &word) {
     const std::string fullUrl =
-        searchUrl +
-        "?q=" + curl_easy_escape(nullptr, word.c_str(), word.size());
+        searchUrl + curl_easy_escape(nullptr, word.c_str(), word.size());
 
     CURL *curl = curl_easy_init();
     if (!curl) {
@@ -169,6 +171,17 @@ std::vector<std::string> readCorpus(const std::string &filename) {
 
     file.close();
     return words;
+}
+
+std::string escapeForCsv(const std::string &str) {
+    std::string escaped = str;
+    // Escape double quotes
+    size_t pos = 0;
+    while ((pos = escaped.find('"', pos)) != std::string::npos) {
+        escaped.insert(pos, "\"");
+        pos += 2; // Move past the inserted quote
+    }
+    return escaped;
 }
 
 int main(int argc, char *argv[]) {
@@ -239,11 +252,11 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        // escape defintion for csv
+        std::string escapedDefinition = escapeForCsv(definition);
+
         // format entry for csv
-        char buffer[1024];
-        snprintf(buffer, sizeof(buffer), "\"%s\",\"%s\"\n", word.c_str(),
-                 definition.c_str());
-        std::string entryString(buffer);
+        std::string entryString = "\"" + word + "\",\"" + escapedDefinition + "\"\n";
 
 // write entry to output file
 #pragma omp critical(csv)
@@ -253,7 +266,7 @@ int main(int argc, char *argv[]) {
                 fclose(file);
                 exit(1);
             }
-            // fflush(file);
+            fflush(file);
         }
 
         numAdded++;
