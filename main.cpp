@@ -9,6 +9,7 @@
 #include <omp.h>
 #include <vector>
 
+bool verbose = false;
 const std::string columns = "word,definition\n";
 const std::string searchUrl =
     "https://www.oxfordlearnersdictionaries.com/search/english/?q=";
@@ -18,12 +19,14 @@ const xmlChar *xPathExpr =
     (const xmlChar *)"//div[@id='entryContent']//span[@class='def']";
 
 void printError(const std::string &msg) {
+    if (verbose) {
 #pragma omp critical(cerr)
-    {
-        // erase full line and move to the beginning
-        std::cerr << "\033[2K\r";
-        // print error message
-        std::cerr << msg << std::endl;
+        {
+            // erase full line and move to the beginning
+            std::cerr << "\033[2K\r";
+            // print error message
+            std::cerr << msg << std::endl;
+        }
     }
 }
 
@@ -77,7 +80,7 @@ std::string extractDefinition(const std::string &html) {
 
     xmlXPathObjectPtr xpathObj;
 
-    // get the first span with class "def" insude the div with id "entryContent"
+    // get the first span with class "def" inside the div with id "entryContent"
     xpathObj = xmlXPathEvalExpression(xPathExpr, xpathCtx);
     if (!xpathObj || !xpathObj->nodesetval ||
         xpathObj->nodesetval->nodeNr == 0) {
@@ -187,13 +190,17 @@ std::string escapeForCsv(const std::string &str) {
 int main(int argc, char *argv[]) {
     std::time_t startTime = std::time(nullptr);
 
-    if (argc != 3) {
+    if (argc < 3 || argc > 4) {
         printError("Usage: " + std::string(argv[0]) +
-                   " <corpus_file> <output_file.csv>");
+                   " [--verbose] <corpus_file> <output_file.csv>");
         return 1;
     }
-    const std::string corpusFile = argv[1];
-    const std::string dicoFile = argv[2];
+
+    if (argc == 4 && std::string(argv[1]) == "--verbose") {
+        verbose = true;
+    }
+    std::string corpusFile = argv[argc - 2];
+    std::string dicoFile = argv[argc - 1];
 
 #ifdef _OPENMP
     std::cout << "OpenMP is enabled." << std::endl;
@@ -256,7 +263,8 @@ int main(int argc, char *argv[]) {
         std::string escapedDefinition = escapeForCsv(definition);
 
         // format entry for csv
-        std::string entryString = "\"" + word + "\",\"" + escapedDefinition + "\"\n";
+        std::string entryString =
+            "\"" + word + "\",\"" + escapedDefinition + "\"\n";
 
 // write entry to output file
 #pragma omp critical(csv)
