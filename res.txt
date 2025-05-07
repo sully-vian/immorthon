@@ -1,0 +1,7 @@
+➜ ./main corpora/words-alpha.txt dictionnaries/dico-alpha.csv
+OpenMP is enabled.
+Fetching definitions for 370105 words...
+[#########-----------------------------------------] 71010/370105 (19%)
+71010 definitions added to dictionnaries/dico-alpha.csv
+299095 definitions failed to be added.
+Time taken: 18255 seconds.
