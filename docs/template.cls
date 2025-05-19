@@ -42,7 +42,8 @@
 \usepackage{mathrsfs}
 \usetikzlibrary{arrows}
 
-\usepackage{hyperref}%pour faire des liens/hyperliens
+\usepackage{hyperref}% pour faire des liens/hyperliens
+\newcommand{\hyperfootnote}[1]{\footnote{\href{#1}{#1}}} % pour les hyperliens dans les notes de bas de page
 %-----------------------------------------------------------------------
 
 %-------------------- Informations sur le rapport ----------------------

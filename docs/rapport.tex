@@ -1,0 +1,73 @@
+\documentclass[french]{template}
+
+\usepackage{textalpha}
+
+\begin{document}
+\titre{Projet Immorthon}
+\UE{Apprentissage Profond}
+\enseignant{Axel \textsc{Carlier}}
+
+\eleves{Axel \textsc{Bechu} \\ Laerian \textsc{Bontinck} \\ Clément \textsc{Demazure} \\ Vianney \textsc{Hervy} \\ Yige \textsc{Yang}}
+
+\fairemarges
+\fairepagedegarde
+\tabledematieres
+
+\section{Introduction}
+
+Lorsque nous entendons pour la première fois un mot en français, il nous est parfois possible d'en comprendre le sens à l'aide du contexte ou de l'étymologie. C'est cette seconde méthode que nous allons essayer de reproduire à l'aide d'un modèle de language.
+
+\section{Description du sujet}
+
+L'objectif de notre projet tient en peu de mots: \textit{un modèle de langage capable de générer des définitions plausibles pour des mots inventés}.
+
+Toute la difficulté tient dans le terme "définition plausible". En effet, il faut non seulement que le texte généré soit grammaticalement correct et ait la forme d'une définition, mais il faut également que le sens donné au mot soit cohérent avec sa structure étymologique. Par exemple, le mot "étymologie" est formé des radicaux grecs {ἔτυμov} (vrai sens) et {λόγος} (discours). Il est donc logique que sa définition fasse référence à l'étude du "vrai" sens des mots. De manière générale, la plupart des mots scientifiques ont des sens assez clairs pour qui a fait des langues anciennes.
+
+Le nom "Immorthon" est un mot-valise entre "immortel" et "python". "Immortel" est le
+surnom\hyperfootnote{https://w.wiki/EDk9} donné aux académiciens de l’Académie Française, dont une partie de la responsibilité
+est de définir les mots de la langue française.
+
+\section{Base de données}
+
+Les données nécessaires sont sous forme de paire mot-définition. Le format JSON est parfait pour cela.
+
+Nous avions initialement prévu un corpus de mots en français. En effet, l'orthographe des mots fait souvent explicitement référence à leur étymologie (majoritairement grecque ou latine). Cependant, Il nous fallait aussi trouver un modèle français préentrainé à affiner. Il nous est apparu finalement plus facile de partir d'un modèle anglais et de l'affiner sur un corpus anglais.
+
+\subsection{Corpus}
+
+% TODO
+
+\subsection{Définitions}
+
+Une fois le corpus choisis, il nous fallait un moyen de récupérer les définitions des mots. Nous avons choisi de les extraire du site Oxford Learner's Dictionaries\hyperfootnote{https://www.oxfordlearnersdictionaries.com}. Ce choix est dû en partie à la qualité des définitions fournies, à la quantité de mots disponibles et surtout à la facilité de scrapper le site.
+
+\subsection{Scrapping}
+
+La difficluté principale du scrapping est de comprendre la structure du site. Il faut trouver un algorithme qui fonctionnera pour toutes les pages de définitions. On pense que ces pages sont elles-mêmes générées automatiquement à partir d'un modèle et d'une base de données de définitions. Il est donc possible de trouver un algorithme qui fonctionne pour toutes les pages.
+
+Malgré cela, de nombreux mots du corpus choisi n'ont pas de définition sur le site. Le résultat du scrapping accéléré par parallélisation OpenMP\hyperfootnote{https://www.openmp.org} est en dessous:
+
+\begin{verbatim}
+$ ./main corpora/words-alpha.txt dictionnaries/dico-alpha.csv
+OpenMP is enabled.
+Fetching definitions for 370105 words...
+[#########-----------------------------------------] 71010/370105 (19%)
+71010 definitions added to dictionnaries/dico-alpha.csv
+299095 definitions failed to be added.
+Time taken: 18255 seconds.
+
+\end{verbatim}
+
+\section{Solution}
+
+La solution que nous avons choisie pour le modèle de langage est très proche de celle réalisée au TP5 (Transformers pour la génération de texte).
+
+En commençant ce projet nous espérions que le modèle apprenne à reconnaitre des préfixes, suffixes et radicaux et à les associer à un sens précis. Cette appproche est parfaitement en accord avec la notion de jetons que le modèle de langage utilise pour générer du texte.
+
+% TODO
+
+\section{Analyse des résultats}
+
+% TODO: essayer plein de defs et analyser
+
+\end{document}
