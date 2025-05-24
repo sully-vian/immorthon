@@ -1,6 +1,9 @@
 \documentclass[french]{template}
 
-\usepackage{textalpha}
+\usepackage{textalpha} % Pour les mots grecs
+\usepackage{minted} % Pour le code
+
+\definecolor{LightGray}{gray}{0.9}
 
 \begin{document}
 \titre{Projet Immorthon}
@@ -35,9 +38,39 @@ Nous avions initialement prévu un corpus de mots en français. En effet, l'orth
 
 \subsection{Corpus}
 
-% TODO
+\begin{listing}[H]
+    \begin{minted}[breaklines,bgcolor=LightGray]{python}
+triphthong
+serosynovial
+syndesmoma
+anton
+intoxication
+vajra
+stue
+loupcerviers
+psychosis
+dirtiest
+\end{minted}
+    \caption{Extrait du corpus (généré avec \texttt{shuf -n 10 words-alpha.txt})}
+\end{listing}
 
 \subsection{Définitions}
+
+\begin{listing}[H]
+    \begin{minted}[breaklines,bgcolor=LightGray]{python}
+"fornicators","a person who has sex with somebody they are not married to"
+"spins","to turn round and round quickly; to make something do this"
+"carbonization","the process of becoming or being made into carbon"
+"agonies","extreme physical or mental pain"
+"militarize","to send armed forces to an area"
+"raptor","any bird of prey"
+"biding","to stay or live in a place"
+"sterility","the fact of not being able to produce children or young animals"
+"armada","a large group of armed ships sailing together"
+"ambiguities","the state of having more than one possible meaning"
+\end{minted}
+    \caption{Extrait des définitions (généré avec \texttt{shuf -n 10 dico-alpha.csv})}
+\end{listing}
 
 Une fois le corpus choisis, il nous fallait un moyen de récupérer les définitions des mots. Nous avons choisi de les extraire du site Oxford Learner's Dictionaries\hyperfootnote{https://www.oxfordlearnersdictionaries.com}. Ce choix est dû en partie à la qualité des définitions fournies, à la quantité de mots disponibles et surtout à la facilité de scrapper le site.
 
@@ -47,7 +80,8 @@ La difficluté principale du scrapping est de comprendre la structure du site. I
 
 Malgré cela, de nombreux mots du corpus choisi n'ont pas de définition sur le site. Le résultat du scrapping accéléré par parallélisation OpenMP\hyperfootnote{https://www.openmp.org} est en dessous:
 
-\begin{verbatim}
+\begin{listing}[H]
+    \begin{minted}[breaklines,bgcolor=LightGray]{text}
 $ ./main corpora/words-alpha.txt dictionnaries/dico-alpha.csv
 OpenMP is enabled.
 Fetching definitions for 370105 words...
@@ -55,12 +89,46 @@ Fetching definitions for 370105 words...
 71010 definitions added to dictionnaries/dico-alpha.csv
 299095 definitions failed to be added.
 Time taken: 18255 seconds.
+\end{minted}
+    \caption{Résultat du scrapping}
+\end{listing}
 
-\end{verbatim}
-
-\section{Solution}
+\section{Modèle}
 
 La solution que nous avons choisie pour le modèle de langage est très proche de celle réalisée au TP5 (Transformers pour la génération de texte).
+
+\subsection{Création du modèle}
+
+Nous avons essayé plusieurs modèles préentrainés différents (DistilGPT2\hyperfootnote{https://huggingface.co/distilbert/distilgpt2}, GPT-2\footnote{https://huggingface.co/openai-community/gpt2}).
+
+Le modèle est importé depuis Hugging Face\hyperfootnote{https://huggingface.co/} ou depuis une sauvegarde de notre modèle déjà affiné sur les définitions. Le tokenizer associé est également importé.
+
+On tokenise ensuite la colonne "text" de notre base de données de définitions. Nous avons choisi un padding de 200 tokens étant donné la répartition des longueurs de définitions.
+
+\subsection{Entraînement}
+
+L'entraînement est réalisé en une seule époque (ou plus si on réentraîne le modèle ultérieurement). La taille du batch est de 8 pour éviter la surchage mémoire des GPU.
+
+Pour le modèle GPT-2, le temps total d'entraînement est d'enviton 1h.
+
+\subsection{Utilisation du modèle}
+
+Comme lors du TP5, nous utilisons ici la fonction \texttt{pipeline} de la librairie Transformers pour générer le texte. Le modèle est chargé avec le tokenizer associé.
+
+Le modèle étant entraîné sur des exemples de la forme \texttt{Define: \textless mot\textgreater\textbackslash n\textless definition\textgreater}, Il faut donc préparer le prompt d'entrée.
+on a donc la fonction suivante avec son utilisation:
+\begin{listing}[H]
+    \begin{minted}[breaklines,bgcolor=LightGray]{python}
+def generate(prompt, numDef):
+    fullPrompt = f"Define: {prompt}\n"
+    results = generator(fullPrompt, num_return_sequences=numDef, ...)
+    return [result["generated_text"] for result in results]
+
+for result in generate("zoophobia", 3):
+    print(result, end="\n\n")
+    \end{minted}
+    \caption{Fonction de génération de texte}
+\end{listing}
 
 En commençant ce projet nous espérions que le modèle apprenne à reconnaitre des préfixes, suffixes et radicaux et à les associer à un sens précis. Cette appproche est parfaitement en accord avec la notion de jetons que le modèle de langage utilise pour générer du texte.
 
