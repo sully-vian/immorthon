@@ -2,6 +2,8 @@
 
 An LLM-based definition generator
 
+The idea was inspired by my other [creabulaire](https://github.com/sully-vian/creabulaire) project
+
 ## Dataset
 
 The training data is a collection of word/definition pairs. Several corpuses of word have been tried:
